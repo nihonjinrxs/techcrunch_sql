@@ -47,19 +47,28 @@ from '/Users/ryan/Dropbox/code/SQL/techcrunch/TechCrunchcontinentalUSA.csv'
 with csv header NULL as '';
 
 drop table if exists continental_usa cascade;
-create table continental_usa as 
-  select
-    permalink,
-    company,
-    numEmps,
-    category,
-    city,
-    state,
-    to_date(fundedDate,'DD-Mon-YY') as fundedDate,
-    cast(raisedAmt as bigint) as raisedAmt,
-    raisedCurrency,
-    round
-  from continental_usa_raw
+create table continental_usa (
+  id bigserial primary key ,
+  permalink text,
+  company text,
+  numEmps int,
+  category text,
+  city text,
+  state char(2),
+  fundedDate date,
+  raisedAmt bigint,
+  raisedCurrency char(3),
+  round text
+);
+insert into continental_usa (
+  permalink, company, numEmps, category, city, state, fundedDate, raisedAmt, raisedCurrency, round
+)
+select
+  permalink, company, numEmps, category, city, state,
+  to_date(fundedDate,'DD-Mon-YY') as fundedDate,
+  cast(raisedAmt as bigint) as raisedAmt,
+  raisedCurrency, round
+from continental_usa_raw
 ;
 comment on table continental_usa
     is 'This import is data from TechCrunch extracted for the blog post at http://districtdatalabs.silvrback.com/simple-csv-data-wrangling-with-python.  The data file can be found at http://samplecsvs.s3.amazonaws.com/TechCrunchcontinentalUSA.csv.';
@@ -88,4 +97,54 @@ create view continental_usa_companies as
 ;
 
 select * from continental_usa_companies;
+
+/* Create view to capture aggregated data by category */
+drop view if exists continental_usa_categories;
+create view continental_usa_categories as
+  select
+    category,
+    count(*) as numFundingRecords,
+    count(distinct round) as numFundingRounds,
+    sum(raisedAmt) as totalRaised
+  from continental_usa
+  group by category
+;
+
+select * from continental_usa_categories;
+
+/* Create function to get funding records for a specific company */
+drop function if exists continental_usa_funding_records_for(text);
+create function continental_usa_funding_records_for (in param_company text) 
+returns table (
+  id bigint,
+  permalink text,
+  company text,
+  numEmps int,
+  category text,
+  city text,
+  state char(2),
+  fundedDate date,
+  raisedAmt bigint,
+  raisedCurrency char(3),
+  round text
+)
+as $body$
+  select 
+    id,
+    permalink,
+    company,
+    numEmps,
+    category,
+    city,
+    state,
+    fundedDate,
+    raisedAmt,
+    raisedCurrency,
+    round
+  from continental_usa
+  where company = param_company
+  order by fundedDate
+$body$ language sql;
+
+select * from continental_usa_funding_records_for('Facebook');
 
